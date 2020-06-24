@@ -1,0 +1,130 @@
+---
+title: "Mobile Game AB Test"
+author: "Zihao Zhou"
+date: "6/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(radiant)
+library(kableExtra)
+
+Mobile <- readr::read_csv("cookie_cats.csv")
+
+```
+
+
+
+## Data&Game Summary
+
+* Cookie Cats is a hugely popular mobile puzzle game developed by Tactile Entertainment. It's a classic "connect three"-style puzzle game where the player must connect tiles of the same color to clear the board and win the level.
+
+  + userid - a unique number that identifies each player.
+  + version - whether the player was put in the control group (gate_30 - a gate at level 30) or the  group with the moved gate (gate_40 - a gate at level 40).
+  + sum_gamerounds - the number of game rounds played by the player during the first 14 days after install.
+  + retention_1 - did the player come back and play 1 day after installing?
+  + retention_7 - did the player come back and play 7 days after installing?
+  + When a player installed the game, he or she was randomly assigned to either gate_30 or gate_40. As a sanity check, let's see if there are roughly the same number of players in each AB group.
+
+
+
+```{r}
+rmarkdown::paged_table(Mobile)
+```
+
+
+
+## Experiment and Control
+
+* First of all, let us take a look at how many people separated into the two versions.
+
+```{r}
+rmarkdown::paged_table(Mobile %>%
+  group_by(version) %>%
+  summarise(Count = n()))
+```
+
+
+The data we have is from 90,189 players that installed the game while the AB-test was running. There are 44,700 players at a gate level of 30. There are 45,489 players at a gate level of 40. First, let us take a look at the distribution of game rounds of the two versions. 
+
+```{r}
+
+Mobile %>%
+  filter(sum_gamerounds < quantile(Mobile$sum_gamerounds, 0.99)) %>%
+  ggplot(aes(x=sum_gamerounds,color = version, fill=version )) + facet_grid(~version) + geom_histogram(fill="white", alpha=0.4, position="dodge", binwidth = 5) + ggtitle('The distribution of game rounds') + labs(x='',y='')
+
+```
+
+
+
+```{r}
+Mobile %>%
+  filter(retention_7 == T) %>%
+  filter(sum_gamerounds < quantile(Mobile$sum_gamerounds, 0.99)) %>%
+  ggplot(aes(x=sum_gamerounds,color = version, fill=version )) + geom_histogram(fill="white", alpha=0.4, position="dodge", binwidth = 5) + facet_grid(~version)   + ggtitle('The distribution of game rounds \n for gamers who retain first week') + labs(x='',y='')
+
+```
+
+
+```{r}
+Mobile %>%
+  group_by(version) %>%
+  summarise(`Retention Rate`= format_nr(mean(retention_1), perc = T))
+```
+
+
+Hypthoesis Test:
+
+Null Hypothesis: There is no difference between the two versions. 
+
+Alternative Hypothesis: There is a difference between the two version. 
+
+```{r}
+
+gate_30 <- Mobile %>% filter(version == 'gate_30')
+gate_40 <- Mobile %>% filter(version == 'gate_40')
+
+d <- mean(gate_30$retention_1)-mean(gate_40$retention_1)
+
+print(paste('the difference between two groups is', d))
+
+p_pool <- mean( (sum(gate_30$retention_1) + sum(gate_40$retention_1))/length(Mobile$userid) )
+
+SE_pool = sqrt(p_pool * (1- p_pool) * (1/length(gate_30$userid) + 1/length(gate_40$userid)) )
+
+print(paste('The confidence interval is',d- 1.96* SE_pool, 'and',d+ 1.96*SE_pool))
+
+```
+
+
+```{r}
+
+t.test(gate_30$retention_1,gate_40$retention_1)
+
+```
+
+From the t-test and confidence interval calculation, we can see that there is no difference between the two versions on the day one retention rate. 
+
+
+
+```{r}
+d <- mean(gate_30$retention_7) - mean(gate_40$retention_7)
+
+print(paste('the difference between two groups is', d))
+
+p_pool <- mean( (sum(gate_30$retention_7) + sum(gate_40$retention_7))/length(Mobile$userid) )
+
+SE_pool = sqrt(p_pool * (1- p_pool) * (1/length(gate_30$userid) + 1/length(gate_40$userid)) )
+
+print(paste('The confidence interval is',d - 1.96* SE_pool, 'and',d + 1.96*SE_pool))
+```
+
+
+```{r}
+t.test(gate_30$retention_7,gate_40$retention_7)
+```
+
+
+
+From the t-test and confidence interval calculation, we can see that there is no difference between the two versions on the day seven retention rate. Therefore, we can see that there is no reason to implement the change. 
